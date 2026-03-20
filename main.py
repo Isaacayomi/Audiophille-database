@@ -8,74 +8,12 @@ conn = psycopg2.connect(
     password="okanmife@07",
     port=5432
 )
-
-# Create a cursor object to execute SQL commands
 cur = conn.cursor()
 
-# 2. Drop existing tables if there's any to start fresh
-cur.execute("DROP TABLE IF EXISTS related_products CASCADE")
-cur.execute("DROP TABLE IF EXISTS product_images CASCADE")
-cur.execute("DROP TABLE IF EXISTS includes CASCADE")
-cur.execute("DROP TABLE IF EXISTS features CASCADE")
-cur.execute("DROP TABLE IF EXISTS products CASCADE")
-
-# Create 'products' table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS products (
-    id SERIAL PRIMARY KEY,
-    slug VARCHAR(255) UNIQUE,
-    name VARCHAR(255),
-    short_name VARCHAR(255),
-    category VARCHAR(50),
-    category_label VARCHAR(50),
-    is_new BOOLEAN DEFAULT FALSE,
-    price INTEGER,
-    description TEXT,
-    category_order INTEGER
-)
-""")
-
-# Create 'features' table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS features (
-    id SERIAL PRIMARY KEY,
-    product_id INT REFERENCES products(id) ON DELETE CASCADE,
-    feature TEXT
-)
-""")
-
-# Create 'includes' table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS includes (
-    id SERIAL PRIMARY KEY,
-    product_id INT REFERENCES products(id) ON DELETE CASCADE,
-    item VARCHAR(255),
-    quantity INT
-)
-""")
-
-# Create 'product_images' table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS product_images (
-    id SERIAL PRIMARY KEY,
-    product_id INT REFERENCES products(id) ON DELETE CASCADE,
-    device VARCHAR(20),   -- mobile, tablet, desktop
-    context VARCHAR(50),  -- product, category, gallery_1, gallery_2, gallery_3
-    url TEXT
-)
-""")
-
-# Create 'related_products' table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS related_products (
-    id SERIAL PRIMARY KEY,
-    product_id INT REFERENCES products(id) ON DELETE CASCADE,
-    related_product_id INT REFERENCES products(id) ON DELETE CASCADE
-)
-""")
-
-# Commit table creation
-conn.commit()
+# Drop existing tables to start fresh
+tables = ["related_products", "product_images", "includes", "features", "products"]
+for table in tables:
+    cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
 
 # Insert products and related data
 products = [
@@ -551,102 +489,155 @@ products = [
   },
 ]
 
-# Insert each product into 'products' table safely
-for p in products:
-  if not isinstance(p, dict):
-    print(f"Skipping invalid product: {p}")
-    continue  # skip if product is not a dictionary
+# Create 'products' table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS products (
+    id SERIAL PRIMARY KEY,
+    slug VARCHAR(255) UNIQUE,
+    name VARCHAR(255),
+    short_name VARCHAR(255),
+    category VARCHAR(50),
+    category_label VARCHAR(50),
+    is_new BOOLEAN DEFAULT FALSE,
+    price INTEGER,
+    description TEXT,
+    category_order INTEGER
+)
+""")
 
-  # Safe extraction with defaults
-  slug = p.get("slug", None)
-  name = p.get("name", "Unnamed Product")
-  short_name = p.get("shortName", "")
-  category = p.get("category", "")
-  category_label = p.get("categoryLabel", "")
-  is_new = p.get("isNew", False)
-  price = p.get("price", 0)
-  description = p.get("description", "")
-  category_order = p.get("categoryOrder", 0)
+# Create 'features' table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS features (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    feature TEXT
+)
+""")
 
-  # Insert product and get product_id
-  cur.execute("""
+# Create 'includes' table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS includes (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    item VARCHAR(255),
+    quantity INT
+)
+""")
+
+# Create 'product_images' table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS product_images (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    device VARCHAR(20),
+    context VARCHAR(50),
+    url TEXT
+)
+""")
+
+# Create 'related_products' table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS related_products (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    related_product_id INT REFERENCES products(id) ON DELETE CASCADE
+)
+""")
+
+conn.commit()
+
+# Insert products and related data
+for product in products:
+    if not isinstance(product, dict):
+        print(f"Skipping invalid product: {product}")
+        continue
+
+    # Extract product data safely
+    slug = product.get("slug")
+    name = product.get("name", "Unnamed Product")
+    short_name = product.get("shortName", "")
+    category = product.get("category", "")
+    category_label = product.get("categoryLabel", "")
+    is_new = product.get("isNew", False)
+    price = product.get("price", 0)
+    description = product.get("description", "")
+    category_order = product.get("categoryOrder", 0)
+
+    # Insert product
+    cur.execute("""
         INSERT INTO products 
         (slug, name, short_name, category, category_label, is_new, price, description, category_order)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (slug, name, short_name, category, category_label, is_new, price, description, category_order))
+    product_id = cur.fetchone()[0]
 
-  product_id = cur.fetchone()[0]
+    # Insert features
+    for feature in product.get("features", []):
+        if isinstance(feature, str):
+            cur.execute("INSERT INTO features (product_id, feature) VALUES (%s, %s)", (product_id, feature))
 
-  # Insert features safely
-  features = p.get("features", [])
-  if isinstance(features, list):
-    for feature in features:
-      if isinstance(feature, str):
-        cur.execute("INSERT INTO features (product_id, feature) VALUES (%s, %s)", (product_id, feature))
+    # Insert includes
+    for include in product.get("includes", []):
+        if isinstance(include, dict):
+            item = include.get("item", "Unknown")
+            quantity = include.get("quantity", 1)
+            cur.execute("INSERT INTO includes (product_id, item, quantity) VALUES (%s, %s, %s)",
+                        (product_id, item, quantity))
 
-  # Insert includes safely
-  includes = p.get("includes", [])
-  if isinstance(includes, list):
-    for include in includes:
-      if isinstance(include, dict):
-        item = include.get("item", "Unknown")
-        quantity = include.get("quantity", 1)
-        cur.execute("INSERT INTO includes (product_id, item, quantity) VALUES (%s, %s, %s)",
-                    (product_id, item, quantity))
+    # Insert category images
+    for device, url in product.get("categoryImage", {}).items():
+        if isinstance(device, str) and isinstance(url, str):
+            cur.execute(
+                "INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
+                (product_id, device, "category", url)
+            )
 
-  # Insert category images safely
-  category_images = p.get("categoryImage", {})
-  if isinstance(category_images, dict):
-    for device, url in category_images.items():
-      if isinstance(device, str) and isinstance(url, str):
-        cur.execute("INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
-                    (product_id, device, "category", url))
+    # Insert product images
+    for device, url in product.get("productImage", {}).items():
+        if isinstance(device, str) and isinstance(url, str):
+            cur.execute(
+                "INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
+                (product_id, device, "product", url)
+            )
 
-  # Insert product images safely
-  product_images = p.get("productImage", {})
-  if isinstance(product_images, dict):
-    for device, url in product_images.items():
-      if isinstance(device, str) and isinstance(url, str):
-        cur.execute("INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
-                    (product_id, device, "product", url))
+    # Insert gallery images
+    gallery_keys = ["first", "second", "third"]
+    for idx, key in enumerate(gallery_keys, start=1):
+        images = product.get("gallery", {}).get(key, {})
+        if isinstance(images, dict):
+            for device, url in images.items():
+                if isinstance(device, str) and isinstance(url, str):
+                    context = f"gallery_{idx}"
+                    cur.execute(
+                        "INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
+                        (product_id, device, context, url)
+                    )
 
-  # Insert gallery images safely
-  gallery = p.get("gallery", {})
-  if isinstance(gallery, dict):
-    for idx, gallery_key in enumerate(["first", "second", "third"], start=1):
-      images = gallery.get(gallery_key, {})
-      if isinstance(images, dict):
-        for device, url in images.items():
-          if isinstance(device, str) and isinstance(url, str):
-            context = f"gallery_{idx}"
-            cur.execute("INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
-                        (product_id, device, context, url))
+# Insert related products
+for main_product in products:
+    if not isinstance(main_product, dict):
+        continue
 
-  # Insert related products safely
-  for p in products:
-    if not isinstance(p, dict):
-      continue
+    cur.execute("SELECT id FROM products WHERE slug = %s", (main_product.get("slug"),))
+    result = cur.fetchone()
+    if not result:
+        continue
+    main_product_id = result[0]
 
-  cur.execute("SELECT id FROM products WHERE slug = %s", (p.get("slug", ""),))
-  result = cur.fetchone()
-  if not result:
-    continue
-  product_id = result[0]
-
-  others = p.get("others", [])
-  if isinstance(others, list):
-    for other in others:
-      if isinstance(other, dict):
-        cur.execute("SELECT id FROM products WHERE slug = %s", (other.get("slug", ""),))
-        related = cur.fetchone()
-        if related:
-          related_product_id = related[0]
-          cur.execute("INSERT INTO related_products (product_id, related_product_id) VALUES (%s, %s)",
-                      (product_id, related_product_id))
+    for other in main_product.get("others", []):
+        if isinstance(other, dict) and "slug" in other:
+            cur.execute("SELECT id FROM products WHERE slug = %s", (other["slug"],))
+            related = cur.fetchone()
+            if related:
+                related_product_id = related[0]
+                cur.execute(
+                    "INSERT INTO related_products (product_id, related_product_id) VALUES (%s, %s)",
+                    (main_product_id, related_product_id)
+                )
 
 # Commit all changes and close connection
 conn.commit()
 cur.close()
 conn.close()
-print("Products, features, includes, images, and related products inserted successfully!")
+print("Database setup and all product data inserted successfully!")
