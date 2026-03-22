@@ -542,8 +542,6 @@ products = [
     }
 ]
 
-
-
 slug_to_id = {}
 
 for product in products:
