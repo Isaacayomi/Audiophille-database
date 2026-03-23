@@ -428,8 +428,8 @@ The request body is a raw JSON payload sent by Stripe. Additionally, a `stripe-s
 Connect with me and explore more of my work:
 
 **[Your Name]**
-*   **LinkedIn**: [Your LinkedIn Profile](https://www.linkedin.com/in/your_username)
-*   **X (formerly Twitter)**: [@YourXUsername](https://x.com/your_username)
+*   **LinkedIn**: [Isaac Ayomide Okunlola](https://www.linkedin.com/in/isaac-ayomide-okunlola-3568b7275)
+*   **X (formerly Twitter)**: [@_devPRIME](https://x.com/_devPRIME)
 
 ---
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
