@@ -1,10 +1,10 @@
 import os
-from typing import List
+from typing import List, Optional
 
 import stripe
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from database import get_connection
 
@@ -55,6 +55,62 @@ class CheckoutCartItem(BaseModel):
 class CheckoutPayload(BaseModel):
     customer: CheckoutCustomer
     cartItems: List[CheckoutCartItem]
+
+
+# Product image groups mirror the storefront's mobile/tablet/desktop structure.
+class ProductImageSet(BaseModel):
+    mobile: str = ""
+    tablet: str = ""
+    desktop: str = ""
+
+
+# Included items shown on the product detail page.
+class ProductInclude(BaseModel):
+    quantity: int
+    item: str
+
+
+# Related product cards shown in the "You May Also Like" section.
+class ProductOther(BaseModel):
+    slug: str
+    category: str
+    name: str
+    image: ProductImageSet
+
+
+# Gallery images shown on the product detail page.
+class ProductGallery(BaseModel):
+    first: ProductImageSet = Field(default_factory=ProductImageSet)
+    second: ProductImageSet = Field(default_factory=ProductImageSet)
+    third: ProductImageSet = Field(default_factory=ProductImageSet)
+
+
+# Full product payload used by the admin dashboard for create/update requests.
+class ProductPayload(BaseModel):
+    slug: str
+    category: str
+    categoryLabel: str
+    shortName: str
+    name: str
+    isNew: bool = False
+    price: int
+    description: str
+    categoryOrder: int = 0
+    features: List[str] = Field(default_factory=list)
+    includes: List[ProductInclude] = Field(default_factory=list)
+    categoryImage: ProductImageSet = Field(default_factory=ProductImageSet)
+    productImage: ProductImageSet = Field(default_factory=ProductImageSet)
+    gallery: ProductGallery = Field(default_factory=ProductGallery)
+    others: List[ProductOther] = Field(default_factory=list)
+    stock: int = 0
+    status: str = "Draft"
+    featured: bool = False
+    image: str = ""
+    storefrontPath: str = ""
+
+
+def empty_image_set() -> dict:
+    return {"mobile": "", "tablet": "", "desktop": ""}
 
 
 def build_product_payload(cur, row):
@@ -132,69 +188,335 @@ def build_product_payload(cur, row):
     }
 
 
+def build_admin_product_payload(cur, row):
+    # Reuse the storefront payload and add admin-only catalog fields.
+    product = build_product_payload(cur, row)
+    product.update({
+        "stock": row[10],
+        "status": row[11],
+        "featured": row[12],
+        "image": row[13],
+        "storefrontPath": row[14],
+    })
+    return product
+
+
+def resolve_image_set(value: ProductImageSet, fallback_url: str) -> ProductImageSet:
+    # If the caller does not send image sizes, we reuse the main image as a safe fallback.
+    if value.mobile or value.tablet or value.desktop:
+        return value
+
+    return ProductImageSet(mobile=fallback_url, tablet=fallback_url, desktop=fallback_url)
+
+
+def upsert_product_related_data(cur, product_id: int, payload: ProductPayload) -> None:
+    # Replace the product's feature, include, image, and related-product records.
+    cur.execute("DELETE FROM features WHERE product_id = %s", (product_id,))
+    cur.execute("DELETE FROM includes WHERE product_id = %s", (product_id,))
+    cur.execute("DELETE FROM product_images WHERE product_id = %s", (product_id,))
+    cur.execute("DELETE FROM related_products WHERE product_id = %s", (product_id,))
+
+    for feature in payload.features or [payload.description]:
+        cur.execute(
+            "INSERT INTO features (product_id, feature) VALUES (%s, %s)",
+            (product_id, feature),
+        )
+
+    includes = payload.includes or [ProductInclude(quantity=1, item="Product unit")]
+    for item in includes:
+        cur.execute(
+            "INSERT INTO includes (product_id, item, quantity) VALUES (%s, %s, %s)",
+            (product_id, item.item, item.quantity),
+        )
+
+    def insert_image(context: str, value: ProductImageSet) -> None:
+        for device, url in value.model_dump().items():
+            if url:
+                cur.execute(
+                    "INSERT INTO product_images (product_id, device, context, url) VALUES (%s, %s, %s, %s)",
+                    (product_id, device, context, url),
+                )
+
+    fallback_images = ProductImageSet(mobile=payload.image, tablet=payload.image, desktop=payload.image)
+    insert_image("category", resolve_image_set(payload.categoryImage, payload.image))
+    insert_image("product", resolve_image_set(payload.productImage, payload.image))
+    insert_image("gallery_1", resolve_image_set(payload.gallery.first, payload.image))
+    insert_image("gallery_2", resolve_image_set(payload.gallery.second, payload.image))
+    insert_image("gallery_3", resolve_image_set(payload.gallery.third, payload.image))
+
+    for other in payload.others or []:
+        cur.execute("SELECT id FROM products WHERE slug = %s", (other.slug,))
+        other_row = cur.fetchone()
+        if other_row:
+            cur.execute(
+                "INSERT INTO related_products (product_id, related_product_id) VALUES (%s, %s)",
+                (product_id, other_row[0]),
+            )
+
+
+def persist_product(cur, payload: ProductPayload, existing_id: Optional[int] = None) -> int:
+    # Insert or update the base product row, then synchronize its child tables.
+    storefront_path = payload.storefrontPath or f"/{payload.category}/{payload.slug}"
+
+    if existing_id is None:
+        cur.execute(
+            """
+            INSERT INTO products (
+                slug, name, short_name, category, category_label, is_new,
+                price, description, category_order, stock, status, featured, image, storefront_path
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """,
+            (
+                payload.slug,
+                payload.name,
+                payload.shortName,
+                payload.category,
+                payload.categoryLabel,
+                payload.isNew,
+                payload.price,
+                payload.description,
+                payload.categoryOrder,
+                payload.stock,
+                payload.status,
+                payload.featured,
+                payload.image,
+                storefront_path,
+            ),
+        )
+        product_id = cur.fetchone()[0]
+    else:
+        cur.execute(
+            """
+            UPDATE products
+            SET slug = %s,
+                name = %s,
+                short_name = %s,
+                category = %s,
+                category_label = %s,
+                is_new = %s,
+                price = %s,
+                description = %s,
+                category_order = %s,
+                stock = %s,
+                status = %s,
+                featured = %s,
+                image = %s,
+                storefront_path = %s
+            WHERE id = %s
+        """,
+            (
+                payload.slug,
+                payload.name,
+                payload.shortName,
+                payload.category,
+                payload.categoryLabel,
+                payload.isNew,
+                payload.price,
+                payload.description,
+                payload.categoryOrder,
+                payload.stock,
+                payload.status,
+                payload.featured,
+                payload.image,
+                storefront_path,
+                existing_id,
+            ),
+        )
+        product_id = existing_id
+
+    upsert_product_related_data(cur, product_id, payload)
+    return product_id
+
+
+def fetch_products(cur, category: Optional[str] = None):
+    # Load the full admin-facing product record list, optionally filtered by category.
+    if category:
+        cur.execute(
+            """
+            SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order, stock, status, featured, image, storefront_path
+            FROM products
+            WHERE LOWER(category) = %s
+            ORDER BY category_order ASC
+        """,
+            (category.lower(),),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order, stock, status, featured, image, storefront_path
+            FROM products
+            ORDER BY category, category_order ASC
+        """
+        )
+
+    rows = cur.fetchall()
+    return [build_admin_product_payload(cur, row) for row in rows]
+
+
+# Admin/product API: list every product for the dashboard and sync flow.
+@app.get("/products")
+def get_products():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        products = fetch_products(cur)
+        return {"products": products}
+    finally:
+        cur.close()
+        conn.close()
+
+
+# Storefront/admin API: list every product in one category, in catalog order.
 @app.get("/products/category/{category}")
 def get_category_products(category: str):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order
-        FROM products
-        WHERE LOWER(category) = %s
-        ORDER BY category_order ASC
-    """, (category.lower(),))
-    rows = cur.fetchall()
+    try:
+        products = fetch_products(cur, category)
 
-    if not rows:
+        if not products:
+            raise HTTPException(status_code=404, detail="No products found")
+
+        return products
+    finally:
         cur.close()
         conn.close()
-        raise HTTPException(status_code=404, detail="No products found")
 
-    products = []
 
-    for row in rows:
-        product_id = row[0]
+# Admin/product API: get a single product by slug so the edit form can preload it.
+@app.get("/products/{slug}")
+def get_product_by_slug(slug: str):
+    conn = get_connection()
+    cur = conn.cursor()
 
-        cur.execute("""
-            SELECT device, url FROM product_images
-            WHERE product_id = %s AND context = 'category'
-        """, (product_id,))
-        category_images = {device: url for device, url in cur.fetchall()}
+    cur.execute("""
+        SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order, stock, status, featured, image, storefront_path
+        FROM products
+        WHERE slug = %s
+    """, (slug,))
+    row = cur.fetchone()
 
-        cur.execute("""
-            SELECT device, url FROM product_images
-            WHERE product_id = %s AND context = 'product'
-        """, (product_id,))
-        product_images = {device: url for device, url in cur.fetchall()}
+    if not row:
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=404, detail="Product not found")
 
-        gallery = {"first": {}, "second": {}, "third": {}}
-        for i, key in enumerate(["first", "second", "third"], start=1):
-            cur.execute("""
-                SELECT device, url FROM product_images
-                WHERE product_id = %s AND context = %s
-            """, (product_id, f"gallery_{i}"))
-            gallery[key] = {device: url for device, url in cur.fetchall()}
-
-        products.append({
-            "id": product_id,
-            "slug": row[1],
-            "name": row[2],
-            "shortName": row[3],
-            "category": row[4],
-            "categoryLabel": row[5],
-            "isNew": row[6],
-            "price": row[7],
-            "description": row[8],
-            "categoryOrder": row[9],
-            "categoryImage": category_images,
-            "productImage": product_images,
-            "gallery": gallery,
-        })
+    product = build_admin_product_payload(cur, row)
 
     cur.close()
     conn.close()
 
-    return products
+    return {"product": product}
+
+
+# Admin/product API: create a new product and its related tables.
+@app.post("/products")
+def create_product(payload: ProductPayload):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM products WHERE slug = %s", (payload.slug,))
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail="Product already exists")
+
+        product_id = persist_product(cur, payload)
+        conn.commit()
+        cur.execute(
+            """
+            SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order, stock, status, featured, image, storefront_path
+            FROM products
+            WHERE id = %s
+        """,
+            (product_id,),
+        )
+        row = cur.fetchone()
+        return {"product": build_admin_product_payload(cur, row)}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+
+# Admin/product API: update an existing product by slug.
+@app.put("/products/{slug}")
+def update_product(slug: str, payload: ProductPayload):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM products WHERE slug = %s", (slug,))
+        row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        product_id = persist_product(cur, payload, existing_id=row[0])
+        conn.commit()
+        cur.execute(
+            """
+            SELECT id, slug, name, short_name, category, category_label, is_new, price, description, category_order, stock, status, featured, image, storefront_path
+            FROM products
+            WHERE id = %s
+        """,
+            (product_id,),
+        )
+        updated_row = cur.fetchone()
+        return {"product": build_admin_product_payload(cur, updated_row)}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+
+# Admin/product API: delete a product and all of its related child rows.
+@app.delete("/products/{slug}")
+def delete_product(slug: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM products WHERE slug = %s", (slug,))
+        row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        product_id = row[0]
+
+        cur.execute(
+            "DELETE FROM related_products WHERE product_id = %s OR related_product_id = %s",
+            (product_id, product_id),
+        )
+        cur.execute("DELETE FROM features WHERE product_id = %s", (product_id,))
+        cur.execute("DELETE FROM includes WHERE product_id = %s", (product_id,))
+        cur.execute("DELETE FROM product_images WHERE product_id = %s", (product_id,))
+        cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+        conn.commit()
+
+        return {"deleted": True}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
 
 
 @app.get("/product/{slug}")
