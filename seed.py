@@ -19,9 +19,15 @@ CREATE TABLE IF NOT EXISTS products (
     is_new BOOLEAN DEFAULT FALSE,
     price INTEGER,
     description TEXT,
-    category_order INTEGER
+    category_order INTEGER,
+    stock INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'Draft',
+    featured BOOLEAN NOT NULL DEFAULT FALSE,
+    image TEXT NOT NULL DEFAULT '',
+    storefront_path TEXT NOT NULL DEFAULT ''
 )
 """)
+
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS features (
