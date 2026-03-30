@@ -1,156 +1,163 @@
-# Audiophile E-commerce API Backend
+# Audiophille API
 
 ## Overview
-This project provides a robust backend API crafted with FastAPI, powering a modern e-commerce platform dedicated to premium audio products. It efficiently manages product catalog data using PostgreSQL and integrates seamlessly with Stripe for secure and streamlined payment processing.
+This project provides the core backend services for an e-commerce platform specializing in audio equipment. It manages the full product catalog and securely handles customer checkout processes. Essentially, it gives an online storefront a solid, reliable foundation for managing inventory and taking payments, making it easier to run an audio gear shop.
 
 ## Features
--   **Python FastAPI**: High-performance, asynchronous web framework for building APIs with minimal boilerplate.
--   **Pydantic**: Data validation and settings management, ensuring robust and clear API request/response schemas.
--   **PostgreSQL**: Reliable and scalable relational database for storing product details, features, and related information.
--   **Stripe Integration**: Securely handles payment checkout sessions and processes webhook events for order fulfillment.
--   **`python-dotenv`**: Manages environment variables for secure and flexible configuration.
--   **CORS Middleware**: Configures Cross-Origin Resource Sharing to allow secure requests from specified frontend applications.
+-   **Comprehensive Product Catalog**: Easily manage a detailed product catalog, including features, included items, and multi-device images.
+-   **Category-Based Product Listings**: Retrieve products filtered by category, ordered for display on a storefront.
+-   **Product Administration (CRUD)**: Create, retrieve, update, and delete product listings through dedicated admin endpoints.
+-   **Secure Checkout Integration**: Process customer orders securely using Stripe Checkout Sessions, supporting various payment methods and shipping options.
+-   **Stripe Webhook Handling**: Automatically receive and process payment confirmations and other events from Stripe.
+-   **Flexible CORS Configuration**: Supports multiple frontend origins for seamless integration with both local and deployed storefronts.
 
 ## Getting Started
-
-To get this API backend up and running locally, follow these steps:
+To get this API up and running on your local machine, follow these steps.
 
 ### Installation
 
 1.  **Clone the Repository**:
     ```bash
     git clone https://github.com/Isaacayomi/Audiophille-database.git
-    cd Audiophille-database # Adjust if your cloned directory has a different name
+    cd Audiophille-database
     ```
 
-2.  **Create a Virtual Environment** (recommended):
+2.  **Create a Virtual Environment**:
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    python -m venv .venv
     ```
 
-3.  **Install Dependencies**:
+3.  **Activate the Virtual Environment**:
+    -   **On macOS and Linux**:
+        ```bash
+        source .venv/bin/activate
+        ```
+    -   **On Windows (Command Prompt)**:
+        ```bash
+        .venv\Scripts\activate.bat
+        ```
+    -   **On Windows (PowerShell)**:
+        ```bash
+        .venv\Scripts\Activate.ps1
+        ```
+
+4.  **Install Dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Set up PostgreSQL Database**:
-    *   Ensure you have a PostgreSQL server running.
-    *   Create a new database for this project (e.g., `audiophile_db`).
+### Environment Variables
+You'll need to set up a `.env` file in the root of your project to configure database connections, Stripe API keys, and allowed frontend origins. Here's what you'll need:
 
-5.  **Seed the Database**:
-    The `seed.py` script will create the necessary tables and populate them with initial product data.
+| Variable                | Description                                                          | Example Value                                                 |
+| :---------------------- | :------------------------------------------------------------------- | :------------------------------------------------------------ |
+| `DB_URL`                | Connection string for your PostgreSQL database.                      | `postgresql://user:password@host:port/database`               |
+| `ALLOWED_ORIGINS`       | Comma-separated list of allowed frontend URLs for CORS.              | `http://localhost:3000,https://your-frontend.vercel.app`      |
+| `FRONTEND_URL`          | The default frontend URL for redirects after Stripe Checkout.        | `http://localhost:3000`                                       |
+| `STRIPE_SECRET_KEY`     | Your Stripe secret API key (starts with `sk_`).                     | `sk_test_YOUR_STRIPE_SECRET_KEY`                              |
+| `STRIPE_WEBHOOK_SECRET` | Your Stripe webhook secret for verifying incoming webhook events.    | `whsec_YOUR_STRIPE_WEBHOOK_SECRET`                            |
+
+Example `.env` file:
+```dotenv
+DB_URL="postgresql://user:password@localhost:5432/audiophille_db"
+ALLOWED_ORIGINS="http://localhost:3000,https://prime-audiophille-ecommerce.vercel.app"
+FRONTEND_URL="http://localhost:3000"
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
+```
+
+## Usage
+
+1.  **Prepare the Database**:
+    First, make sure your PostgreSQL database is running. Then, run the `seed.py` script to create the necessary tables and populate them with initial product data.
     ```bash
     python seed.py
     ```
 
-6.  **Run the FastAPI Application**:
+2.  **Start the API Server**:
+    With your virtual environment active and `.env` configured, you can start the FastAPI server:
     ```bash
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn main:app --reload
     ```
     The API will be accessible at `http://localhost:8000`.
 
-### Environment Variables
-Create a `.env` file in the root directory of the project and populate it with the following variables:
-
-```dotenv
-DB_URL="postgresql://user:password@host:port/database_name"
-# OR individual components if preferred:
-# DB_HOST="localhost"
-# DB_NAME="audiophile_db"
-# DB_USER="your_db_user"
-# DB_PASSWORD="your_db_password"
-# DB_PORT="5432"
-
-STRIPE_SECRET_KEY="sk_test_..."
-STRIPE_WEBHOOK_SECRET="whsec_..."
-
-FRONTEND_URL="http://localhost:3000"
-ALLOWED_ORIGINS="http://localhost:3000,https://prime-audiophille-ecommerce.vercel.app"
-```
-
-**Explanation:**
-*   `DB_URL` (or individual `DB_HOST`, `DB_NAME`, etc.): Your PostgreSQL database connection string.
-*   `STRIPE_SECRET_KEY`: Your secret key from Stripe. Required for creating checkout sessions. Obtain this from your [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys).
-*   `STRIPE_WEBHOOK_SECRET`: Your webhook signing secret from Stripe. Essential for verifying webhook events. Obtain this when setting up a [Stripe Webhook Endpoint](https://dashboard.stripe.com/test/webhooks).
-*   `FRONTEND_URL`: The base URL of your frontend application. Used for Stripe success/cancel redirects. Defaults to `http://localhost:3000`.
-*   `ALLOWED_ORIGINS`: A comma-separated list of origins (frontend URLs) that are permitted to access this API via CORS.
-
-## Usage
-
-Once the server is running, you can interact with the API using tools like `curl`, Postman, or by integrating it with your frontend application.
-
-**Example: Fetching products by category**
-To retrieve all products within the 'headphones' category:
-
-```bash
-curl -X GET "http://localhost:8000/products/category/headphones" \
-     -H "accept: application/json"
-```
-
-**Example: Fetching a single product by slug**
-To retrieve details for the 'xx99-mark-two-headphones' product:
-
-```bash
-curl -X GET "http://localhost:8000/product/xx99-mark-two-headphones" \
-     -H "accept: application/json"
-```
-
-**Example: Creating a Stripe Checkout Session**
-To initiate a payment checkout process, send a POST request to the `/payments/create-checkout-session` endpoint with customer and cart item details.
-
-```bash
-curl -X POST "http://localhost:8000/payments/create-checkout-session" \
-     -H "accept: application/json" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "customer": {
-             "name": "Jane Doe",
-             "email": "jane.doe@example.com",
-             "phone": "+1234567890",
-             "address": "123 Commerce St",
-             "zipCode": "10001",
-             "city": "New York",
-             "country": "US"
-           },
-           "cartItems": [
-             {
-               "slug": "xx99-mark-two-headphones",
-               "name": "XX99 Mark II Headphones",
-               "shortName": "XX99 MK II",
-               "price": 2999,
-               "image": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
-               "quantity": 1
-             }
-           ]
-         }'
-```
-This will return a Stripe checkout URL, which your frontend can then redirect the user to.
-
-## Technologies Used
-
-| Technology    | Description                                                 |
-| :------------ | :---------------------------------------------------------- |
-| **Python**    | The primary programming language for the backend.           |
-| **FastAPI**   | Modern, fast (high-performance) web framework for building APIs. |
-| **Pydantic**  | Data validation and settings management using Python type hints. |
-| **PostgreSQL**| Robust open-source relational database.                     |
-| **Psycopg2**  | PostgreSQL adapter for Python.                              |
-| **Stripe**    | Payment processing platform for e-commerce transactions.    |
-| **Uvicorn**   | ASGI server for running FastAPI applications.               |
-| **python-dotenv** | Reads key-value pairs from a `.env` file.                 |
+3.  **Interact with the API**:
+    You can now make requests to the API endpoints. For example, to get all products:
+    ```bash
+    curl http://localhost:8000/products
+    ```
 
 ## API Documentation
+
 ### Base URL
-The API is served at the root path, typically `http://localhost:8000/` in a local development environment.
+`http://localhost:8000`
 
 ### Endpoints
 
-#### GET /products/category/{category}
-Retrieves a list of products belonging to a specific category, ordered by `category_order`.
+#### GET `/products`
+Retrieves a list of all products, including admin-specific fields like `stock` and `status`.
 
-**Request**:
-This endpoint does not require a request body. The category is provided as a path parameter.
+**Response**:
+```json
+{
+  "products": [
+    {
+      "id": 1,
+      "slug": "xx99-mark-two-headphones",
+      "name": "XX99 Mark II Headphones",
+      "shortName": "XX99 MK II",
+      "category": "headphones",
+      "categoryLabel": "Headphones",
+      "isNew": true,
+      "price": 2999,
+      "description": "The new XX99 Mark II headphones is the pinnacle of pristine audio...",
+      "categoryOrder": 1,
+      "features": [
+        "Featuring a genuine leather head strap...",
+        "The advanced driver unit architecture..."
+      ],
+      "includes": [
+        { "item": "Headphone unit", "quantity": 1 },
+        { "item": "Replacement earcups", "quantity": 2 }
+      ],
+      "categoryImage": {
+        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-category-page-preview.jpg",
+        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-category-page-preview.jpg",
+        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-category-page-preview.jpg"
+      },
+      "productImage": {
+        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-product.jpg",
+        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
+      },
+      "gallery": {
+        "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+        "second": { "mobile": "...", "tablet": "...", "desktop": "..." },
+        "third": { "mobile": "...", "tablet": "...", "desktop": "..." }
+      },
+      "others": [
+        {
+          "slug": "xx99-mark-one-headphones",
+          "category": "headphones",
+          "name": "XX99 Mark I",
+          "image": { "mobile": "...", "tablet": "...", "desktop": "..." }
+        }
+      ],
+      "stock": 100,
+      "status": "Published",
+      "featured": true,
+      "image": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+      "storefrontPath": "/headphones/xx99-mark-two-headphones"
+    }
+  ]
+}
+```
+
+#### GET `/products/category/{category}`
+Fetches a list of products belonging to a specific category, ordered by `categoryOrder`.
+
+**Path Parameters**:
+-   `category`: The product category (e.g., `headphones`, `speakers`, `earphones`).
 
 **Response**:
 ```json
@@ -166,120 +173,29 @@ This endpoint does not require a request body. The category is provided as a pat
     "price": 2999,
     "description": "The new XX99 Mark II headphones is the pinnacle of pristine audio...",
     "categoryOrder": 1,
-    "categoryImage": {
-      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-category-page-preview.jpg",
-      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-category-page-preview.jpg",
-      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-category-page-preview.jpg"
-    },
-    "productImage": {
-      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
-      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-product.jpg",
-      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
-    },
-    "gallery": {
-      "first": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-1.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-1.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-1.jpg"
-      },
-      "second": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-2.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-2.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-2.jpg"
-      },
-      "third": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-3.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-3.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-3.jpg"
-      }
-    }
+    "features": [],
+    "includes": [],
+    "categoryImage": {},
+    "productImage": {},
+    "gallery": { "first": {}, "second": {}, "third": {} },
+    "others": [],
+    "stock": 100,
+    "status": "Published",
+    "featured": true,
+    "image": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+    "storefrontPath": "/headphones/xx99-mark-two-headphones"
   }
-  // ... more products
 ]
 ```
 
 **Errors**:
--   `404 Not Found`: No products found for the specified category.
+-   404: No products found for the given category.
 
-#### GET /product/{slug}
-Retrieves the detailed information for a single product using its unique slug.
+#### GET `/products/{slug}`
+Retrieves a single product by its slug, including all admin-facing details. This is typically used for admin dashboards.
 
-**Request**:
-This endpoint does not require a request body. The product slug is provided as a path parameter.
-
-**Response**:
-```json
-{
-  "product": {
-    "id": 1,
-    "slug": "xx99-mark-two-headphones",
-    "name": "XX99 Mark II Headphones",
-    "shortName": "XX99 MK II",
-    "category": "headphones",
-    "categoryLabel": "Headphones",
-    "isNew": true,
-    "price": 2999,
-    "description": "The new XX99 Mark II headphones is the pinnacle of pristine audio...",
-    "categoryOrder": 1,
-    "features": [
-      "Featuring a genuine leather head strap...",
-      "The advanced driver unit architecture..."
-    ],
-    "includes": [
-      { "item": "Headphone unit", "quantity": 1 },
-      { "item": "Replacement earcups", "quantity": 2 }
-    ],
-    "categoryImage": {
-      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-category-page-preview.jpg",
-      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-category-page-preview.jpg",
-      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-category-page-preview.jpg"
-    },
-    "productImage": {
-      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
-      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-product.jpg",
-      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
-    },
-    "gallery": {
-      "first": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-1.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-1.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-1.jpg"
-      },
-      "second": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-2.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-2.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-2.jpg"
-      },
-      "third": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-3.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-3.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-3.jpg"
-      }
-    },
-    "others": [
-      {
-        "slug": "xx99-mark-one-headphones",
-        "category": "headphones",
-        "name": "XX99 Mark I",
-        "image": {
-          "mobile": "/assets/shared/mobile/image-xx99-mark-one-headphones.jpg",
-          "tablet": "/assets/shared/tablet/image-xx99-mark-one-headphones.jpg",
-          "desktop": "/assets/shared/desktop/image-xx99-mark-one-headphones.jpg"
-        }
-      }
-    ]
-  }
-}
-```
-
-**Errors**:
--   `404 Not Found`: Product not found for the specified slug.
-
-#### GET /product/{category}/{slug}
-Retrieves the detailed information for a single product, filtered by both category and slug.
-
-**Request**:
-This endpoint does not require a request body. The category and product slug are provided as path parameters.
+**Path Parameters**:
+-   `slug`: The unique identifier for the product (e.g., `xx99-mark-two-headphones`).
 
 **Response**:
 ```json
@@ -314,32 +230,294 @@ This endpoint does not require a request body. The category and product slug are
       "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
     },
     "gallery": {
-      "first": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-1.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-1.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-1.jpg"
-      },
-      "second": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-2.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-2.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-2.jpg"
-      },
-      "third": {
-        "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-gallery-3.jpg",
-        "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-gallery-3.jpg",
-        "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-gallery-3.jpg"
-      }
+      "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "second": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "third": { "mobile": "...", "tablet": "...", "desktop": "..." }
     },
     "others": [
       {
         "slug": "xx99-mark-one-headphones",
         "category": "headphones",
         "name": "XX99 Mark I",
-        "image": {
-          "mobile": "/assets/shared/mobile/image-xx99-mark-one-headphones.jpg",
-          "tablet": "/assets/shared/tablet/image-xx99-mark-one-headphones.jpg",
-          "desktop": "/assets/shared/desktop/image-xx99-mark-one-headphones.jpg"
-        }
+        "image": { "mobile": "...", "tablet": "...", "desktop": "..." }
+      }
+    ],
+    "stock": 100,
+    "status": "Published",
+    "featured": true,
+    "image": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+    "storefrontPath": "/headphones/xx99-mark-two-headphones"
+  }
+}
+```
+
+**Errors**:
+-   404: Product not found.
+
+#### POST `/products`
+Creates a new product entry in the database.
+
+**Request**:
+```json
+{
+  "slug": "new-product-slug",
+  "category": "headphones",
+  "categoryLabel": "Headphones",
+  "shortName": "New Prod",
+  "name": "New Product Name",
+  "isNew": true,
+  "price": 500,
+  "description": "A description for the new product.",
+  "categoryOrder": 4,
+  "features": [
+    "Feature one",
+    "Feature two"
+  ],
+  "includes": [
+    { "quantity": 1, "item": "Product unit" }
+  ],
+  "categoryImage": {
+    "mobile": "/assets/new-product/mobile/category.jpg",
+    "tablet": "/assets/new-product/tablet/category.jpg",
+    "desktop": "/assets/new-product/desktop/category.jpg"
+  },
+  "productImage": {
+    "mobile": "/assets/new-product/mobile/product.jpg",
+    "tablet": "/assets/new-product/tablet/product.jpg",
+    "desktop": "/assets/new-product/desktop/product.jpg"
+  },
+  "gallery": {
+    "first": { "mobile": "...", "tablet": "...", "desktop": "..." }
+  },
+  "others": [
+    { "slug": "xx99-mark-two-headphones", "category": "headphones", "name": "XX99 Mark II", "image": { "mobile": "...", "tablet": "...", "desktop": "..." } }
+  ],
+  "stock": 50,
+  "status": "Draft",
+  "featured": false,
+  "image": "/assets/new-product/mobile/product.jpg",
+  "storefrontPath": "/headphones/new-product-slug"
+}
+```
+
+**Response**:
+```json
+{
+  "product": {
+    "id": 7,
+    "slug": "new-product-slug",
+    "name": "New Product Name",
+    "shortName": "New Prod",
+    "category": "headphones",
+    "categoryLabel": "Headphones",
+    "isNew": true,
+    "price": 500,
+    "description": "A description for the new product.",
+    "categoryOrder": 4,
+    "features": [
+      "Feature one",
+      "Feature two"
+    ],
+    "includes": [
+      { "item": "Product unit", "quantity": 1 }
+    ],
+    "categoryImage": {
+      "mobile": "/assets/new-product/mobile/category.jpg",
+      "tablet": "/assets/new-product/tablet/category.jpg",
+      "desktop": "/assets/new-product/desktop/category.jpg"
+    },
+    "productImage": {
+      "mobile": "/assets/new-product/mobile/product.jpg",
+      "tablet": "/assets/new-product/tablet/product.jpg",
+      "desktop": "/assets/new-product/desktop/product.jpg"
+    },
+    "gallery": {
+      "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "second": { "mobile": "", "tablet": "", "desktop": "" },
+      "third": { "mobile": "", "tablet": "", "desktop": "" }
+    },
+    "others": [
+      {
+        "slug": "xx99-mark-two-headphones",
+        "category": "headphones",
+        "name": "XX99 Mark II",
+        "image": { "mobile": "...", "tablet": "...", "desktop": "..." }
+      }
+    ],
+    "stock": 50,
+    "status": "Draft",
+    "featured": false,
+    "image": "/assets/new-product/mobile/product.jpg",
+    "storefrontPath": "/headphones/new-product-slug"
+  }
+}
+```
+
+**Errors**:
+-   409: Product with the given slug already exists.
+-   500: Internal server error.
+
+#### PUT `/products/{slug}`
+Updates an existing product identified by its slug.
+
+**Path Parameters**:
+-   `slug`: The unique identifier for the product to update.
+
+**Request**:
+```json
+{
+  "slug": "existing-product-slug",
+  "category": "headphones",
+  "categoryLabel": "Headphones",
+  "shortName": "Updated Prod",
+  "name": "Updated Product Name",
+  "isNew": false,
+  "price": 600,
+  "description": "An updated description for the product.",
+  "categoryOrder": 4,
+  "features": [
+    "Updated feature one"
+  ],
+  "includes": [
+    { "quantity": 2, "item": "Updated unit" }
+  ],
+  "categoryImage": {
+    "mobile": "/assets/existing-product/mobile/category-updated.jpg",
+    "tablet": "/assets/existing-product/tablet/category-updated.jpg",
+    "desktop": "/assets/existing-product/desktop/category-updated.jpg"
+  },
+  "productImage": {
+    "mobile": "/assets/existing-product/mobile/product-updated.jpg",
+    "tablet": "/assets/existing-product/tablet/product-updated.jpg",
+    "desktop": "/assets/existing-product/desktop/product-updated.jpg"
+  },
+  "gallery": {
+    "first": { "mobile": "...", "tablet": "...", "desktop": "..." }
+  },
+  "others": [],
+  "stock": 45,
+  "status": "Published",
+  "featured": true,
+  "image": "/assets/existing-product/mobile/product-updated.jpg",
+  "storefrontPath": "/headphones/existing-product-slug"
+}
+```
+
+**Response**:
+```json
+{
+  "product": {
+    "id": 7,
+    "slug": "existing-product-slug",
+    "name": "Updated Product Name",
+    "shortName": "Updated Prod",
+    "category": "headphones",
+    "categoryLabel": "Headphones",
+    "isNew": false,
+    "price": 600,
+    "description": "An updated description for the product.",
+    "categoryOrder": 4,
+    "features": [
+      "Updated feature one"
+    ],
+    "includes": [
+      { "item": "Updated unit", "quantity": 2 }
+    ],
+    "categoryImage": {
+      "mobile": "/assets/existing-product/mobile/category-updated.jpg",
+      "tablet": "/assets/existing-product/tablet/category-updated.jpg",
+      "desktop": "/assets/existing-product/desktop/category-updated.jpg"
+    },
+    "productImage": {
+      "mobile": "/assets/existing-product/mobile/product-updated.jpg",
+      "tablet": "/assets/existing-product/tablet/product-updated.jpg",
+      "desktop": "/assets/existing-product/desktop/product-updated.jpg"
+    },
+    "gallery": {
+      "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "second": { "mobile": "", "tablet": "", "desktop": "" },
+      "third": { "mobile": "", "tablet": "", "desktop": "" }
+    },
+    "others": [],
+    "stock": 45,
+    "status": "Published",
+    "featured": true,
+    "image": "/assets/existing-product/mobile/product-updated.jpg",
+    "storefrontPath": "/headphones/existing-product-slug"
+  }
+}
+```
+
+**Errors**:
+-   404: Product not found.
+-   500: Internal server error.
+
+#### DELETE `/products/{slug}`
+Deletes a product and all its associated data (features, includes, images, related products).
+
+**Path Parameters**:
+-   `slug`: The unique identifier for the product to delete.
+
+**Response**:
+```json
+{
+  "deleted": true
+}
+```
+
+**Errors**:
+-   404: Product not found.
+-   500: Internal server error.
+
+#### GET `/product/{slug}`
+Retrieves a single product by its slug, optimized for storefront display (without admin-specific fields like stock, status, featured, etc.).
+
+**Path Parameters**:
+-   `slug`: The unique identifier for the product (e.g., `xx99-mark-two-headphones`).
+
+**Response**:
+```json
+{
+  "product": {
+    "id": 1,
+    "slug": "xx99-mark-two-headphones",
+    "name": "XX99 Mark II Headphones",
+    "shortName": "XX99 MK II",
+    "category": "headphones",
+    "categoryLabel": "Headphones",
+    "isNew": true,
+    "price": 2999,
+    "description": "The new XX99 Mark II headphones is the pinnacle of pristine audio...",
+    "categoryOrder": 1,
+    "features": [
+      "Featuring a genuine leather head strap...",
+      "The advanced driver unit architecture..."
+    ],
+    "includes": [
+      { "item": "Headphone unit", "quantity": 1 },
+      { "item": "Replacement earcups", "quantity": 2 }
+    ],
+    "categoryImage": {
+      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-category-page-preview.jpg",
+      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-category-page-preview.jpg",
+      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-category-page-preview.jpg"
+    },
+    "productImage": {
+      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-product.jpg",
+      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
+    },
+    "gallery": {
+      "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "second": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "third": { "mobile": "...", "tablet": "...", "desktop": "..." }
+    },
+    "others": [
+      {
+        "slug": "xx99-mark-one-headphones",
+        "category": "headphones",
+        "name": "XX99 Mark I",
+        "image": { "mobile": "...", "tablet": "...", "desktop": "..." }
       }
     ]
   }
@@ -347,67 +525,119 @@ This endpoint does not require a request body. The category and product slug are
 ```
 
 **Errors**:
--   `404 Not Found`: Product not found for the specified category and slug combination.
+-   404: Product not found.
 
-#### POST /payments/create-checkout-session
-Initiates a Stripe Checkout Session for payment processing. Requires customer details and a list of items in the cart.
+#### GET `/product/{category}/{slug}`
+Retrieves a single product by its category and slug, optimized for storefront display. This helps ensure the product is in the correct category context.
+
+**Path Parameters**:
+-   `category`: The product category (e.g., `headphones`).
+-   `slug`: The unique identifier for the product.
+
+**Response**:
+```json
+{
+  "product": {
+    "id": 1,
+    "slug": "xx99-mark-two-headphones",
+    "name": "XX99 Mark II Headphones",
+    "shortName": "XX99 MK II",
+    "category": "headphones",
+    "categoryLabel": "Headphones",
+    "isNew": true,
+    "price": 2999,
+    "description": "The new XX99 Mark II headphones is the pinnacle of pristine audio...",
+    "categoryOrder": 1,
+    "features": [
+      "Featuring a genuine leather head strap...",
+      "The advanced driver unit architecture..."
+    ],
+    "includes": [
+      { "item": "Headphone unit", "quantity": 1 },
+      { "item": "Replacement earcups", "quantity": 2 }
+    ],
+    "categoryImage": {
+      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-category-page-preview.jpg",
+      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-category-page-preview.jpg",
+      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-category-page-preview.jpg"
+    },
+    "productImage": {
+      "mobile": "/assets/product-xx99-mark-two-headphones/mobile/image-product.jpg",
+      "tablet": "/assets/product-xx99-mark-two-headphones/tablet/image-product.jpg",
+      "desktop": "/assets/product-xx99-mark-two-headphones/desktop/image-product.jpg"
+    },
+    "gallery": {
+      "first": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "second": { "mobile": "...", "tablet": "...", "desktop": "..." },
+      "third": { "mobile": "...", "tablet": "...", "desktop": "..." }
+    },
+    "others": [
+      {
+        "slug": "xx99-mark-one-headphones",
+        "category": "headphones",
+        "name": "XX99 Mark I",
+        "image": { "mobile": "...", "tablet": "...", "desktop": "..." }
+      }
+    ]
+  }
+}
+```
+
+**Errors**:
+-   404: Product not found.
+
+#### POST `/payments/create-checkout-session`
+Creates a new Stripe Checkout Session for processing an order. This will return a URL to Stripe's hosted checkout page.
 
 **Request**:
 ```json
 {
   "customer": {
-    "name": "string",
-    "email": "user@example.com",
-    "phone": "string",
-    "address": "string",
-    "zipCode": "string",
-    "city": "string",
-    "country": "string"
+    "name": "Jane Doe",
+    "email": "jane.doe@example.com",
+    "phone": "+1234567890",
+    "address": "123 Main St",
+    "zipCode": "90210",
+    "city": "Beverly Hills",
+    "country": "US"
   },
   "cartItems": [
     {
-      "slug": "string",
-      "name": "string",
-      "shortName": "string",
-      "price": 0,
-      "image": "string",
-      "quantity": 0
+      "slug": "xx99-mark-two-headphones",
+      "name": "XX99 Mark II Headphones",
+      "shortName": "XX99 MK II",
+      "price": 2999,
+      "image": "/path/to/image.jpg",
+      "quantity": 1
+    },
+    {
+      "slug": "zx9-speaker",
+      "name": "ZX9 Speaker",
+      "shortName": "ZX9",
+      "price": 4500,
+      "image": "/path/to/speaker-image.jpg",
+      "quantity": 2
     }
   ]
 }
 ```
-**Required fields**:
--   `customer.name`: Customer's full name.
--   `customer.email`: Customer's email address (must be a valid email format).
--   `customer.phone`: Customer's phone number.
--   `customer.address`: Customer's street address.
--   `customer.zipCode`: Customer's postal/zip code.
--   `customer.city`: Customer's city.
--   `customer.country`: Customer's country.
--   `cartItems`: A list of product objects in the cart. Each item requires:
-    -   `slug`: Product's unique slug.
-    -   `name`: Product's full name.
-    -   `shortName`: Product's short name.
-    -   `price`: Product's price in base currency units (e.g., dollars, not cents).
-    -   `image`: URL to the product image.
-    -   `quantity`: Number of this product in the cart.
 
 **Response**:
 ```json
 {
-  "url": "https://checkout.stripe.com/c/pay/..."
+  "url": "https://checkout.stripe.com/c/pay/cs_test_..."
 }
 ```
 
 **Errors**:
--   `400 Bad Request`: `detail`: "Cart is empty".
--   `500 Internal Server Error`: `detail`: "Missing STRIPE_SECRET_KEY" or "Stripe did not return a checkout URL" or other Stripe-related processing errors.
+-   400: Cart is empty.
+-   500: Missing `STRIPE_SECRET_KEY` or Stripe did not return a checkout URL.
 
-#### POST /payments/webhook
-Endpoint for Stripe webhook events. This API receives and processes events from Stripe, such as `checkout.session.completed`, for post-payment actions.
+#### POST `/payments/webhook`
+Handles incoming Stripe webhook events, such as `checkout.session.completed`. This endpoint processes payment confirmations.
 
 **Request**:
-The request body is a raw JSON payload sent by Stripe. Additionally, a `stripe-signature` header is required for verification.
+(Stripe sends a raw JSON payload and a `stripe-signature` header)
 
 **Response**:
 ```json
@@ -417,25 +647,31 @@ The request body is a raw JSON payload sent by Stripe. Additionally, a `stripe-s
 ```
 
 **Errors**:
--   `400 Bad Request`:
-    -   `detail`: "Missing stripe-signature header"
-    -   `detail`: "Invalid payload" (if the raw body cannot be parsed by Stripe)
-    -   `detail`: "Invalid signature" (if the `stripe-signature` does not match the payload and webhook secret)
--   `500 Internal Server Error`: `detail`: "Missing STRIPE_WEBHOOK_SECRET".
+-   400: Missing `stripe-signature` header, invalid payload, or invalid signature.
+-   500: Missing `STRIPE_WEBHOOK_SECRET`.
+
+## Technologies Used
+
+| Technology    | Description                                                      | Link                                                           |
+| :------------ | :--------------------------------------------------------------- | :------------------------------------------------------------- |
+| Python        | The primary programming language used.                           | [Python](https://www.python.org/)                              |
+| FastAPI       | A modern, fast (high-performance) web framework for building APIs. | [FastAPI](https://fastapi.tiangolo.com/)                       |
+| Pydantic      | Data validation and settings management using Python type hints. | [Pydantic](https://docs.pydantic.dev/latest/)                  |
+| PostgreSQL    | A powerful, open-source relational database system.              | [PostgreSQL](https://www.postgresql.org/)                      |
+| Psycopg2      | A PostgreSQL adapter for Python.                                 | [Psycopg2](https://www.psycopg.org/docs/)                      |
+| Stripe        | A leading platform for online payment processing.                | [Stripe](https://stripe.com/)                                  |
+| python-dotenv | Loads environment variables from a `.env` file.                  | [python-dotenv](https://pypi.org/project/python-dotenv/)       |
+| Uvicorn       | An ASGI server for running Python web applications.              | [Uvicorn](https://www.uvicorn.org/)                            |
 
 ## Author Info
 
-Connect with me and explore more of my work:
+-   **LinkedIn**: [Your LinkedIn Profile](https://www.linkedin.com/in/YOUR_LINKEDIN_USERNAME)
+-   **X (formerly Twitter)**: [@YourTwitterHandle](https://x.com/YourTwitterHandle)
 
-**[Your Name]**
-*   **LinkedIn**: [Isaac Ayomide Okunlola](https://www.linkedin.com/in/isaac-ayomide-okunlola-3568b7275)
-*   **X (formerly Twitter)**: [@_devPRIME](https://x.com/_devPRIME)
-
----
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Pydantic](https://img.shields.io/badge/Pydantic-2.12.0-E92063.svg?style=flat-square&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/latest/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791.svg?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Stripe](https://img.shields.io/badge/Stripe-Integration-626CD9.svg?style=flat-square&logo=stripe&logoColor=white)](https://stripe.com/)
-
+## Badges
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.135.1-009688.svg)](https://fastapi.tiangolo.com/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-2.12.5-E92063.svg)](https://docs.pydantic.dev/latest/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791.svg)](https://www.postgresql.org/)
+[![Stripe](https://img.shields.io/badge/Stripe-Integration-635BFF.svg)](https://stripe.com/)
 [![Readme was generated by Dokugen](https://img.shields.io/badge/Readme%20was%20generated%20by-Dokugen-brightgreen)](https://www.npmjs.com/package/dokugen)
