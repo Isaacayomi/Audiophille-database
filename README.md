@@ -665,8 +665,8 @@ Handles incoming Stripe webhook events, such as `checkout.session.completed`. Th
 
 ## Author Info
 
--   **LinkedIn**: [Your LinkedIn Profile](https://www.linkedin.com/in/YOUR_LINKEDIN_USERNAME)
--   **X (formerly Twitter)**: [@YourTwitterHandle](https://x.com/YourTwitterHandle)
+-   LinkedIn: [Isaac Ayomide Okunlola](https://www.linkedin.com/in/isaac-ayomide-okunlola-3568b7275/)
+-   X (formerly Twitter): [Prime-codes](https://x.com/_devPRIME)
 
 ## Badges
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
